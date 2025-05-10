@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { User, Phone, History } from 'lucide-react'
+import { User, Phone, History, Sun, Moon } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface Customer {
   id: string
@@ -38,6 +39,8 @@ export default function Home() {
   const [historyEndDate, setHistoryEndDate] = useState<string>('')
   const [nameResults, setNameResults] = useState<Customer[]>([])
   const modalRef = useRef<HTMLDivElement>(null)
+  const [darkMode, setDarkMode] = useState(false)
+  const [globalLoading, setGlobalLoading] = useState(false)
 
   // Load all customers on initial render
   useEffect(() => {
@@ -51,6 +54,14 @@ export default function Home() {
       setTransactions([])
     }
   }, [currentCustomer])
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
 
   const loadCustomers = async () => {
     try {
@@ -181,10 +192,11 @@ export default function Home() {
     e.preventDefault()
     if (!newCustomer.phoneNumber.trim()) {
       setError('Phone number is required')
+      toast.error('Phone number is required')
       return
     }
-
     setLoading(true)
+    setGlobalLoading(true)
     try {
       console.log('Adding new customer:', {
         phone_number: newCustomer.phoneNumber,
@@ -215,15 +227,19 @@ export default function Home() {
       setShowAddForm(false)
       setNewCustomer({ phoneNumber: '', name: '', total_points: 0 })
       setError('')
+      toast.success('Customer added!')
     } catch (error: any) {
       console.error('Error adding customer:', error)
       if (error.code === '23505') {
         setError('This phone number already exists')
+        toast.error('This phone number already exists')
       } else {
         setError('Failed to add customer')
+        toast.error('Failed to add customer')
       }
     } finally {
       setLoading(false)
+      setGlobalLoading(false)
     }
   }
 
@@ -233,9 +249,11 @@ export default function Home() {
     const amount = Math.floor(Number(purchaseAmount))
     if (amount <= 0) {
       setError('Please enter a valid purchase amount')
+      toast.error('Please enter a valid purchase amount')
       return
     }
     setLoading(true)
+    setGlobalLoading(true)
     try {
       const newPoints = currentCustomer.total_points + amount
       const { data, error } = await supabase
@@ -261,10 +279,13 @@ export default function Home() {
       setError('')
       // Reload transactions
       loadTransactions(currentCustomer.id)
+      toast.success('Points added!')
     } catch (error) {
       setError('Failed to add points')
+      toast.error('Failed to add points')
     } finally {
       setLoading(false)
+      setGlobalLoading(false)
     }
   }
 
@@ -273,14 +294,17 @@ export default function Home() {
     // Only allow redeeming in $5 increments and only if enough points
     if (redeemAmount % 5 !== 0) {
       setError('Redemption must be in $5 increments.')
+      toast.error('Redemption must be in $5 increments.')
       return
     }
     const pointsNeeded = (redeemAmount / 5) * 100
     if (currentCustomer.total_points < pointsNeeded) {
       setError('Not enough points for this redemption.')
+      toast.error('Not enough points for this redemption.')
       return
     }
     setLoading(true)
+    setGlobalLoading(true)
     try {
       const newPoints = currentCustomer.total_points - pointsNeeded
       const { data, error } = await supabase
@@ -305,10 +329,13 @@ export default function Home() {
       setError('')
       // Reload transactions
       loadTransactions(currentCustomer.id)
+      toast.success('Points redeemed!')
     } catch (error) {
       setError('Failed to redeem points')
+      toast.error('Failed to redeem points')
     } finally {
       setLoading(false)
+      setGlobalLoading(false)
     }
   }
 
@@ -330,25 +357,39 @@ export default function Home() {
   const totalPages = Math.ceil(transactions.length / historyPageSize)
 
   return (
-    <main className="min-h-screen bg-[#f7fcfa] font-sans">
+    <main className="min-h-screen bg-[#f7fcfa] dark:bg-[#18181b] font-sans transition-colors">
       {/* Header Bar */}
-      <header className="w-full bg-black py-4 px-8 flex items-center mb-10">
+      <header className="w-full bg-black py-4 px-8 flex items-center mb-10 justify-between">
         <h1 className="text-2xl font-bold text-white">Customer Points Tracker</h1>
+        <button
+          className="ml-auto bg-gray-800 hover:bg-gray-700 text-white rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-white"
+          onClick={() => setDarkMode((d) => !d)}
+          title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label="Toggle dark mode"
+        >
+          {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
       </header>
+      {/* Loading spinner overlay */}
+      {globalLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row items-start justify-center gap-8 w-full px-4">
         {/* Left Column: Search & Add Customer */}
         <div className="flex flex-col gap-8 w-full max-w-xl">
           {/* Search Card */}
-          <div className="bg-white shadow rounded-xl p-8">
-            <h2 className="text-2xl font-bold mb-6">Search Customer</h2>
+          <div className="bg-white dark:bg-zinc-800 shadow dark:shadow-lg rounded-xl p-8">
+            <h2 className="text-2xl font-bold mb-6 text-black dark:text-white">Search Customer</h2>
             <form onSubmit={handleSearch} className="space-y-6">
               <div>
-                <label className="block text-base font-semibold mb-1">Phone Number</label>
+                <label className="block text-base font-semibold mb-1 text-black dark:text-white">Phone Number</label>
                 <input
                   type="text"
                   value={searchPhone}
                   onChange={(e) => setSearchPhone(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black"
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black bg-white dark:bg-zinc-900 text-black dark:text-white"
                   placeholder="Enter phone number or name"
                   disabled={loading}
                 />
@@ -387,28 +428,28 @@ export default function Home() {
 
           {/* Add New Customer Card */}
           {showAddForm && (
-            <div className="bg-white shadow rounded-xl p-8">
-              <h2 className="text-2xl font-bold mb-6">Add New Customer</h2>
+            <div className="bg-white dark:bg-zinc-800 shadow dark:shadow-lg rounded-xl p-8">
+              <h2 className="text-2xl font-bold mb-6 text-black dark:text-white">Add New Customer</h2>
               <form onSubmit={handleAddCustomer} className="space-y-6">
                 <div>
-                  <label className="block text-base font-semibold mb-1">Phone Number</label>
+                  <label className="block text-base font-semibold mb-1 text-black dark:text-white">Phone Number</label>
                   <input
                     type="tel"
                     value={newCustomer.phoneNumber}
                     onChange={(e) => setNewCustomer({ ...newCustomer, phoneNumber: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black bg-white dark:bg-zinc-900 text-black dark:text-white border border-gray-300 dark:border-zinc-700"
                     placeholder="Enter phone number"
                     pattern="[0-9]*"
                     disabled={loading}
                   />
                 </div>
                 <div>
-                  <label className="block text-base font-semibold mb-1">Name (Optional)</label>
+                  <label className="block text-base font-semibold mb-1 text-black dark:text-white">Name (Optional)</label>
                   <input
                     type="text"
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black bg-white dark:bg-zinc-900 text-black dark:text-white border border-gray-300 dark:border-zinc-700"
                     placeholder="Enter customer name"
                     disabled={loading}
                   />
@@ -425,9 +466,9 @@ export default function Home() {
           )}
 
           {nameResults.length > 1 && (
-            <div className="bg-white shadow rounded-xl p-6 mt-4">
-              <h3 className="text-lg font-bold mb-4">Select a Customer</h3>
-              <table className="min-w-full text-left text-sm">
+            <div className="bg-white dark:bg-zinc-800 shadow dark:shadow-lg rounded-xl p-6 mt-4">
+              <h3 className="text-lg font-bold mb-4 text-black dark:text-white">Select a Customer</h3>
+              <table className="min-w-full text-left text-sm mb-4 text-black dark:text-white">
                 <thead>
                   <tr>
                     <th className="px-2 py-1">Name</th>
@@ -463,7 +504,7 @@ export default function Home() {
 
         {/* Right Column: Customer Details */}
         {currentCustomer && (
-          <div className="w-full max-w-2xl bg-white shadow rounded-xl p-8 flex flex-col gap-6 relative">
+          <div className="w-full max-w-2xl bg-white dark:bg-zinc-800 shadow dark:shadow-lg rounded-xl p-8 flex flex-col gap-6 relative">
             {/* Show History Icon Button (top right) */}
             <button
               className="absolute top-6 right-6 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full p-2 shadow focus:outline-none focus:ring-2 focus:ring-black"
@@ -478,48 +519,42 @@ export default function Home() {
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-green-400 flex items-center justify-center text-white text-3xl font-bold shadow">
                 {currentCustomer.name?.[0]?.toUpperCase() || currentCustomer.phone_number.slice(-2)}
               </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
-                  <span>Customer Details</span>
-                  <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">#{currentCustomer.phone_number.slice(-4)}</span>
-                </h2>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <User className="w-4 h-4" />
-                  <span className="font-semibold">{currentCustomer.name || "—"}</span>
-                  <Phone className="w-4 h-4 ml-4" />
-                  <span>{currentCustomer.phone_number}</span>
-                </div>
+              <div className="flex items-center gap-4 text-black dark:text-white">
+                <span className="text-2xl font-extrabold">{currentCustomer.name || "—"}</span>
+                <User className="w-5 h-5 text-gray-400" />
+                <span className="text-lg font-semibold tracking-wide ml-4">{currentCustomer.phone_number}</span>
+                <Phone className="w-5 h-5 text-gray-400" />
               </div>
             </div>
-            <div className="flex items-center gap-6 mt-2">
-              <div>
-                <div className="text-xs text-gray-500">Points</div>
-                <div className="text-3xl font-extrabold text-blue-600 flex items-center gap-2">
+            <div className="flex flex-row items-center justify-between gap-6 mt-6 mb-2 w-full">
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Points</span>
+                <span className="text-4xl font-extrabold text-blue-600 flex items-center gap-2">
                   {currentCustomer.total_points}
                   <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">pts</span>
-                </div>
+                </span>
               </div>
-              <div>
-                <div className="text-xs text-gray-500">Available for Redemption</div>
-                <div className="text-2xl font-bold text-green-600">${formatPointsToDollars(currentCustomer.total_points)}</div>
+              <div className="flex flex-col items-end">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Available for Redemption</span>
+                <span className="text-3xl font-bold text-green-600">${formatPointsToDollars(currentCustomer.total_points)}</span>
               </div>
             </div>
             {/* Add Points Form */}
             <div className="mb-8">
               <form onSubmit={handleAddPoints} className="space-y-4">
                 <div>
-                  <label className="block text-base font-semibold mb-1">Purchase Amount ($)</label>
+                  <label className="block text-base font-semibold mb-1 text-black dark:text-white">Purchase Amount ($)</label>
                   <input
                     type="number"
                     value={purchaseAmount}
                     onChange={(e) => setPurchaseAmount(e.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-zinc-900 text-black dark:text-white"
                     min="0"
                     step="1"
                     placeholder="Enter purchase amount"
                     disabled={loading}
                   />
-                  <p className="text-sm text-gray-500 mt-1">Earn 1 point per $1 spent</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Earn 1 point per $1 spent</p>
                 </div>
                 <button
                   type="submit"
@@ -533,8 +568,8 @@ export default function Home() {
             {/* Redemption Options */}
             {currentCustomer.total_points >= 100 && (
               <div className="mb-8">
-                <h3 className="text-xl font-semibold mb-3">Redeem Points</h3>
-                <p className="text-sm text-gray-600 mb-3">100 points = $5</p>
+                <h3 className="text-xl font-semibold mb-3 text-black dark:text-white">Redeem Points</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">100 points = $5</p>
                 <div className="grid grid-cols-2 gap-4">
                   {getRedemptionOptions(currentCustomer.total_points).map(amount => (
                     <button
@@ -552,62 +587,104 @@ export default function Home() {
             {/* Transaction History Modal */}
             {showHistory && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                <div ref={modalRef} className="bg-white rounded-xl shadow-lg p-6 w-full max-w-2xl relative">
+                <div
+                  ref={modalRef}
+                  className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl dark:shadow-lg p-8 w-full max-w-2xl relative animate-fade-in"
+                  style={{ minWidth: 350 }}
+                >
+                  {/* Close Button */}
                   <button
-                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                    className="absolute top-4 right-4 bg-gray-200 dark:bg-zinc-700 hover:bg-gray-300 dark:hover:bg-zinc-600 text-gray-700 dark:text-gray-200 rounded-full p-2 transition"
                     onClick={() => setShowHistory(false)}
+                    aria-label="Close"
                   >
                     &times;
                   </button>
-                  <h3 className="text-xl font-semibold mb-3">History</h3>
+                  <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">History</h3>
+                  {/* Filters */}
                   <div className="flex gap-4 mb-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700">Start Date</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-400">Start Date</label>
                       <input
                         type="date"
                         value={historyStartDate}
                         onChange={e => setHistoryStartDate(e.target.value)}
-                        className="border rounded px-2 py-1"
+                        className="border rounded px-2 py-1 bg-white dark:bg-zinc-900 text-black dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700">End Date</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-400">End Date</label>
                       <input
                         type="date"
                         value={historyEndDate}
                         onChange={e => setHistoryEndDate(e.target.value)}
-                        className="border rounded px-2 py-1"
+                        className="border rounded px-2 py-1 bg-white dark:bg-zinc-900 text-black dark:text-white"
                       />
                     </div>
                   </div>
+                  {/* Totals */}
+                  {transactions.length > 0 && (() => {
+                    const totalSpent = transactions.filter(tx => tx.type === 'add').reduce((sum, tx) => sum + (tx.amount || 0), 0);
+                    const totalRedeemedPoints = transactions.filter(tx => tx.type === 'redeem').reduce((sum, tx) => sum + (tx.points_changed || 0), 0);
+                    const totalRedeemedDollars = ((-totalRedeemedPoints / 100) * 5).toFixed(2);
+                    return (
+                      <div className="flex gap-8 mb-4 p-3 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700">
+                        <div className="text-base text-black dark:text-white">
+                          <span className="font-semibold">Total Spent:</span> <span className="font-mono">${totalSpent}</span>
+                        </div>
+                        <div className="text-base text-black dark:text-white">
+                          <span className="font-semibold">Total Redeemed:</span> <span className="font-mono">${totalRedeemedDollars}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <hr className="my-4 border-gray-200 dark:border-zinc-700" />
+                  {/* Table */}
                   {paginatedTransactions.length === 0 ? (
-                    <p className="text-gray-500">No history for this range.</p>
+                    <p className="text-gray-500 text-black dark:text-gray-400">No history for this range.</p>
                   ) : (
-                    <table className="min-w-full text-left text-sm mb-4">
-                      <thead>
-                        <tr>
-                          <th className="px-2 py-1">Date</th>
-                          <th className="px-2 py-1">Type</th>
-                          <th className="px-2 py-1">Amount ($)</th>
-                          <th className="px-2 py-1">Points</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedTransactions.map(tx => (
-                          <tr key={tx.id}>
-                            <td className="px-2 py-1">{new Date(tx.created_at).toLocaleString()}</td>
-                            <td className="px-2 py-1 capitalize">{tx.type}</td>
-                            <td className="px-2 py-1">{tx.amount}</td>
-                            <td className="px-2 py-1">{tx.points_changed > 0 ? `+${tx.points_changed}` : tx.points_changed}</td>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-sm mb-4 text-black dark:text-white">
+                        <thead>
+                          <tr className="bg-gray-100 dark:bg-zinc-900">
+                            <th className="px-2 py-2 font-bold">Date</th>
+                            <th className="px-2 py-2 font-bold">Type</th>
+                            <th className="px-2 py-2 font-bold text-right">Amount ($)</th>
+                            <th className="px-2 py-2 font-bold text-right">Points</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {paginatedTransactions.map(tx => (
+                            <tr
+                              key={tx.id}
+                              className="hover:bg-gray-50 dark:hover:bg-zinc-700 transition"
+                            >
+                              <td className="px-2 py-1">{new Date(tx.created_at).toLocaleString()}</td>
+                              <td className="px-2 py-1">
+                                <span
+                                  className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                                    tx.type === 'add'
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}
+                                >
+                                  {tx.type === 'add' ? 'Add' : 'Redeem'}
+                                </span>
+                              </td>
+                              <td className="px-2 py-1 text-right font-mono">{tx.amount}</td>
+                              <td className="px-2 py-1 text-right font-mono">
+                                {tx.points_changed > 0 ? `+${tx.points_changed}` : tx.points_changed}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                   {/* Pagination Controls */}
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center mt-2">
                     <button
-                      className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+                      className="px-3 py-1 bg-gray-200 dark:bg-zinc-700 rounded disabled:opacity-50"
                       onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
                       disabled={historyPage === 1}
                     >
@@ -615,7 +692,7 @@ export default function Home() {
                     </button>
                     <span>Page {historyPage} of {totalPages || 1}</span>
                     <button
-                      className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+                      className="px-3 py-1 bg-gray-200 dark:bg-zinc-700 rounded disabled:opacity-50"
                       onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
                       disabled={historyPage === totalPages || totalPages === 0}
                     >
