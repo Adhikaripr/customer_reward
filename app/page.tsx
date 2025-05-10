@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { User, Phone, History } from 'lucide-react'
 
 interface Customer {
   id: string
@@ -269,12 +270,12 @@ export default function Home() {
 
   const handleRedeem = async (redeemAmount: number) => {
     if (!currentCustomer) return
-    // Only allow redeeming in $10 increments and only if enough points
-    if (redeemAmount % 10 !== 0) {
-      setError('Redemption must be in $10 increments.')
+    // Only allow redeeming in $5 increments and only if enough points
+    if (redeemAmount % 5 !== 0) {
+      setError('Redemption must be in $5 increments.')
       return
     }
-    const pointsNeeded = redeemAmount * 10
+    const pointsNeeded = (redeemAmount / 5) * 100
     if (currentCustomer.total_points < pointsNeeded) {
       setError('Not enough points for this redemption.')
       return
@@ -313,15 +314,15 @@ export default function Home() {
 
   const getRedemptionOptions = (points: number) => {
     const options = []
-    const maxRedemption = Math.floor(points / 100) * 10
-    for (let i = 10; i <= maxRedemption; i += 10) {
+    const maxRedemption = Math.floor(points / 100) * 5
+    for (let i = 5; i <= maxRedemption; i += 5) {
       options.push(i)
     }
     return options
   }
 
   const formatPointsToDollars = (points: number) => {
-    return (points / 10).toFixed(2)
+    return ((points / 100) * 5).toFixed(2)
   }
 
   // Pagination logic
@@ -462,18 +463,49 @@ export default function Home() {
 
         {/* Right Column: Customer Details */}
         {currentCustomer && (
-          <div className="w-full max-w-2xl bg-white shadow rounded-xl p-8">
-            <h2 className="text-2xl font-bold mb-6">Customer Details</h2>
-            <div className="mb-6 space-y-1">
-              <p className="text-lg"><span className="font-semibold">Phone:</span> {currentCustomer.phone_number}</p>
-              {currentCustomer.name && <p className="text-lg"><span className="font-semibold">Name:</span> {currentCustomer.name}</p>}
-              <p className="text-xl font-bold mt-2">Points: {currentCustomer.total_points}</p>
-              <p className="text-lg text-gray-600">Available for Redemption: ${formatPointsToDollars(currentCustomer.total_points)}</p>
+          <div className="w-full max-w-2xl bg-white shadow rounded-xl p-8 flex flex-col gap-6 relative">
+            {/* Show History Icon Button (top right) */}
+            <button
+              className="absolute top-6 right-6 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full p-2 shadow focus:outline-none focus:ring-2 focus:ring-black"
+              onClick={() => setShowHistory(true)}
+              title="Show History"
+              aria-label="Show History"
+            >
+              <History className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-4">
+              {/* Avatar */}
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-green-400 flex items-center justify-center text-white text-3xl font-bold shadow">
+                {currentCustomer.name?.[0]?.toUpperCase() || currentCustomer.phone_number.slice(-2)}
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+                  <span>Customer Details</span>
+                  <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">#{currentCustomer.phone_number.slice(-4)}</span>
+                </h2>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <User className="w-4 h-4" />
+                  <span className="font-semibold">{currentCustomer.name || "—"}</span>
+                  <Phone className="w-4 h-4 ml-4" />
+                  <span>{currentCustomer.phone_number}</span>
+                </div>
+              </div>
             </div>
-
+            <div className="flex items-center gap-6 mt-2">
+              <div>
+                <div className="text-xs text-gray-500">Points</div>
+                <div className="text-3xl font-extrabold text-blue-600 flex items-center gap-2">
+                  {currentCustomer.total_points}
+                  <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">pts</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Available for Redemption</div>
+                <div className="text-2xl font-bold text-green-600">${formatPointsToDollars(currentCustomer.total_points)}</div>
+              </div>
+            </div>
             {/* Add Points Form */}
             <div className="mb-8">
-              <h3 className="text-xl font-semibold mb-3">Add Points</h3>
               <form onSubmit={handleAddPoints} className="space-y-4">
                 <div>
                   <label className="block text-base font-semibold mb-1">Purchase Amount ($)</label>
@@ -498,12 +530,11 @@ export default function Home() {
                 </button>
               </form>
             </div>
-
             {/* Redemption Options */}
             {currentCustomer.total_points >= 100 && (
               <div className="mb-8">
                 <h3 className="text-xl font-semibold mb-3">Redeem Points</h3>
-                <p className="text-sm text-gray-600 mb-3">100 points = $10</p>
+                <p className="text-sm text-gray-600 mb-3">100 points = $5</p>
                 <div className="grid grid-cols-2 gap-4">
                   {getRedemptionOptions(currentCustomer.total_points).map(amount => (
                     <button
@@ -518,15 +549,6 @@ export default function Home() {
                 </div>
               </div>
             )}
-
-            {/* Toggle History Button */}
-            <button
-              className="mb-4 mt-8 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg"
-              onClick={() => setShowHistory(true)}
-            >
-              Show History
-            </button>
-
             {/* Transaction History Modal */}
             {showHistory && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
