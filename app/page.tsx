@@ -35,6 +35,7 @@ export default function Home() {
   const [historyPageSize] = useState(10)
   const [historyStartDate, setHistoryStartDate] = useState<string>('')
   const [historyEndDate, setHistoryEndDate] = useState<string>('')
+  const [nameResults, setNameResults] = useState<Customer[]>([])
   const modalRef = useRef<HTMLDivElement>(null)
 
   // Load all customers on initial render
@@ -116,29 +117,56 @@ export default function Home() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setNameResults([])
     try {
-      console.log('Searching for phone:', searchPhone)
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('phone_number', searchPhone)
-        .maybeSingle()
-
+      const input = searchPhone.trim()
+      const isPhone = /^\d{7,}$/.test(input) // 7+ digits = phone
+      let data = null
+      let error = null
+      if (isPhone) {
+        // Search by phone number
+        const res = await supabase
+          .from('customers')
+          .select('*')
+          .eq('phone_number', input)
+          .maybeSingle()
+        data = res.data
+        error = res.error
+      } else {
+        // Search by name (case-insensitive, exact match, allow multiple)
+        const res = await supabase
+          .from('customers')
+          .select('*')
+          .ilike('name', input)
+        if (res.error) throw res.error
+        if (res.data && res.data.length === 1) {
+          data = res.data[0]
+        } else if (res.data && res.data.length > 1) {
+          setNameResults(res.data)
+          setCurrentCustomer(null)
+          setShowAddForm(false)
+          setError('')
+          setLoading(false)
+          return
+        } else {
+          data = null
+        }
+      }
       if (error) {
         console.error('Search error:', error)
         throw error
       }
-
-      console.log('Search result:', data)
-
       if (data) {
         setCurrentCustomer(data)
         setShowAddForm(false)
         setError('')
       } else {
         setCurrentCustomer(null)
-        setShowAddForm(true)
-        setNewCustomer({ ...newCustomer, phoneNumber: searchPhone })
+        // Only show add form if searching by phone
+        setShowAddForm(isPhone)
+        if (isPhone) {
+          setNewCustomer({ ...newCustomer, phoneNumber: input })
+        }
       }
     } catch (error) {
       console.error('Error searching customer:', error)
@@ -316,12 +344,11 @@ export default function Home() {
               <div>
                 <label className="block text-base font-semibold mb-1">Phone Number</label>
                 <input
-                  type="tel"
+                  type="text"
                   value={searchPhone}
                   onChange={(e) => setSearchPhone(e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black"
-                  placeholder="Enter 10-digit phone number"
-                  pattern="[0-9]*"
+                  placeholder="Enter phone number or name"
                   disabled={loading}
                 />
               </div>
@@ -393,6 +420,42 @@ export default function Home() {
                   {loading ? 'Adding...' : 'Add Customer'}
                 </button>
               </form>
+            </div>
+          )}
+
+          {nameResults.length > 1 && (
+            <div className="bg-white shadow rounded-xl p-6 mt-4">
+              <h3 className="text-lg font-bold mb-4">Select a Customer</h3>
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr>
+                    <th className="px-2 py-1">Name</th>
+                    <th className="px-2 py-1">Phone</th>
+                    <th className="px-2 py-1">Points</th>
+                    <th className="px-2 py-1"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nameResults.map(cust => (
+                    <tr key={cust.id}>
+                      <td className="px-2 py-1">{cust.name}</td>
+                      <td className="px-2 py-1">{cust.phone_number}</td>
+                      <td className="px-2 py-1">{cust.total_points}</td>
+                      <td className="px-2 py-1">
+                        <button
+                          className="bg-black text-white font-semibold py-1 px-4 rounded-lg shadow hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-black"
+                          onClick={() => {
+                            setCurrentCustomer(cust)
+                            setNameResults([])
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
