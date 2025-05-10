@@ -41,6 +41,9 @@ export default function Home() {
   const modalRef = useRef<HTMLDivElement>(null)
   const [darkMode, setDarkMode] = useState(false)
   const [globalLoading, setGlobalLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState<Customer[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
 
   // Load all customers on initial render
   useEffect(() => {
@@ -125,6 +128,38 @@ export default function Home() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showHistory])
+
+  // Typeahead handler
+  const handleTypeahead = async (value: string) => {
+    setSearchPhone(value);
+    if (!value.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const isPhone = /^\d+$/.test(value.trim());
+    let res;
+    if (isPhone) {
+      res = await supabase
+        .from('customers')
+        .select('*')
+        .ilike('phone_number', `%${value.trim()}%`)
+        .limit(5);
+    } else {
+      res = await supabase
+        .from('customers')
+        .select('*')
+        .ilike('name', `%${value.trim()}%`)
+        .limit(5);
+    }
+    if (res.data) {
+      setSuggestions(res.data);
+      setShowSuggestions(true);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -383,16 +418,40 @@ export default function Home() {
           <div className="bg-white dark:bg-zinc-800 shadow dark:shadow-lg rounded-xl p-8">
             <h2 className="text-2xl font-bold mb-6 text-black dark:text-white">Search Customer</h2>
             <form onSubmit={handleSearch} className="space-y-6">
-              <div>
-                <label className="block text-base font-semibold mb-1 text-black dark:text-white">Phone Number</label>
+              <div className="relative" ref={searchBoxRef}>
                 <input
                   type="text"
                   value={searchPhone}
-                  onChange={(e) => setSearchPhone(e.target.value)}
+                  onChange={e => handleTypeahead(e.target.value)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
+                  onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black bg-white dark:bg-zinc-900 text-black dark:text-white"
                   placeholder="Enter phone number or name"
                   disabled={loading}
                 />
+                {showSuggestions && suggestions.length > 0 && (
+                  <ul className="absolute z-10 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg mt-1 w-full shadow-lg max-h-60 overflow-y-auto">
+                    {suggestions.map((cust, idx) => (
+                      <li
+                        key={cust.id}
+                        className={`px-4 py-2 cursor-pointer \
+                          hover:bg-gray-100 dark:hover:bg-zinc-700 \
+                          text-black dark:text-white \
+                          ${idx !== suggestions.length - 1 ? 'border-b border-gray-100 dark:border-zinc-800' : ''}`}
+                        onMouseDown={() => {
+                          setSearchPhone(cust.phone_number || cust.name || '');
+                          setCurrentCustomer(cust);
+                          setSuggestions([]);
+                          setShowSuggestions(false);
+                          setShowAddForm(false);
+                        }}
+                      >
+                        <span className="font-semibold">{cust.name || '—'}</span>
+                        <span className="ml-2 text-gray-500 dark:text-gray-400">{cust.phone_number}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="flex gap-3">
                 <button
